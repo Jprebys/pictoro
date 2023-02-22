@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#define PPM_HEADER_MAXSIZE 256
+
 
 typedef struct
 {
@@ -11,13 +13,6 @@ typedef struct
     size_t width, height;
 } p_frame;
 
-void pictoro_fill_frame(p_frame *frame, const uint32_t color)
-{
-    for (size_t i = 0; i < frame->width * frame->height; ++i)
-    {
-        frame->pixels[i] = color;
-    }
-}
 
 int pictoro_create_frame(p_frame **frame, const size_t width, const size_t height)
 {
@@ -25,9 +20,7 @@ int pictoro_create_frame(p_frame **frame, const size_t width, const size_t heigh
     p_frame *result = malloc(sizeof(p_frame));
 
     if (pixels == NULL || result == NULL)
-    {
         return 1;
-    }
 
     memset(pixels, 0, width * height * sizeof(uint32_t));
 
@@ -38,6 +31,23 @@ int pictoro_create_frame(p_frame **frame, const size_t width, const size_t heigh
     *frame = result;
     return 0;
 } 
+
+
+void pictoro_free_frame(p_frame *frame)
+{
+    free(frame->pixels);
+    free(frame);
+}
+
+
+void pictoro_fill_frame(p_frame *frame, const uint32_t color)
+{
+    for (size_t i = 0; i < frame->width * frame->height; ++i)
+    {
+        frame->pixels[i] = color;
+    }
+}
+
 
 void pictoro_fill_rect(p_frame *frame, size_t x, size_t y, size_t w, size_t h, uint32_t color)
 {
@@ -66,10 +76,10 @@ int pictoro_save_frame(const p_frame *frame, const char *filename)
     if (f == NULL)
         return 1;
 
-    char header[256];
+    char header[PPM_HEADER_MAXSIZE];
     char *pam_fmt = "P6\n%u %u\n255\n";
     snprintf(header, sizeof(header), pam_fmt, frame->width, frame->height);
-    header[255] = 0;
+    header[PPM_HEADER_MAXSIZE - 1] = 0;
     fwrite(header, sizeof(char), strlen(header), f);
 
     for (size_t i = 0; i < frame->width * frame->height; ++i)

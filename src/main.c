@@ -26,9 +26,11 @@ int main()
     pictoro_fill_frame(frame, 0x00FF00FF);
     pictoro_fill_rect(frame, 100, 100, 500, 400, 0xFF00FFFF);
 
-    if (pictoro_save_frame(frame, "green.ppm"))
-        error_and_die("save_frame green");
+    if (pictoro_save_frame(frame, "frame.ppm"))
+        error_and_die("save_frame");
 
     printf("Successfully created and saved frame\n");
+
+    pictoro_free_frame(frame);
     return 0;
 }
