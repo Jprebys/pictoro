@@ -70,8 +70,6 @@ int pictoro_save_frame(const p_frame *frame, const char *filename)
     char *pam_fmt = "P6\n%u %u\n255\n";
     snprintf(header, sizeof(header), pam_fmt, frame->width, frame->height);
     header[255] = 0;
-    printf(header);
-
     fwrite(header, sizeof(char), strlen(header), f);
 
     for (size_t i = 0; i < frame->width * frame->height; ++i)
@@ -85,7 +83,6 @@ int pictoro_save_frame(const p_frame *frame, const char *filename)
 
         fwrite(value, sizeof(value), 1, f);
     }
-
     return 0;
 }
 
