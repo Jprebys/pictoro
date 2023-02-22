@@ -3,6 +3,7 @@
 
 #include "pictoro.h"
 
+
 void error_and_die(char *reason)
 {
     perror(reason);
@@ -12,18 +13,21 @@ void error_and_die(char *reason)
 
 int main()
 {
-    unsigned int width, height;
+    size_t width, height;
+    p_frame *frame;
 
     width = 600;
     height = 400; 
 
-    p_frame *frame;
-    
     if (pictoro_create_frame(&frame, width, height))
         error_and_die("create_frame");
     
-    if (pictoro_save_frame(frame, "pic.ppm"))
-        error_and_die("save_frame");
+    // Fill green and add purple rectangle
+    pictoro_fill_frame(frame, 0x00FF00FF);
+    pictoro_fill_rect(frame, 100, 100, 150, 250, 0xFF00FFFF);
+
+    if (pictoro_save_frame(frame, "green.ppm"))
+        error_and_die("save_frame green");
 
     printf("Successfully created and saved frame\n");
     return 0;
