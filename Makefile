@@ -2,6 +2,7 @@ TARGET = pictoro
 SRC_DIR = src
 CC = gcc
 CFLAGS = -g -Wall -Wextra -std=c11
+LIBS = -lSDL2
 
 .PHONY: default all clean
 

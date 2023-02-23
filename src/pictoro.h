@@ -85,8 +85,9 @@ void pictoro_write_str(p_frame *frame, const size_t x, const size_t y,
 
     for (size_t i = 0; i < strlen(str); ++i)
     {
-        int char_code = str[i] - 32;
-        if (str[i] == '\n')
+        char current_char = str[i];
+
+        if (current_char == '\n')
         {
             cursor_x = x;
             letter_x_start = x;
@@ -94,10 +95,17 @@ void pictoro_write_str(p_frame *frame, const size_t x, const size_t y,
             letter_y_start = cursor_y;
             continue;
         }
+        else if (current_char < 32)
+        {
+            printf("[WARN] Unprintable char in pictoro_write_str (value: %d). Skipping.\n", current_char);
+            continue;
+        }
+
+        int bitmap_idx = current_char - 32;
 
         for (int j = 12; j >= 0; --j)
         {
-            char scanline = bitmap_letters[char_code][j];
+            char scanline = bitmap_letters[bitmap_idx][j];
             for (int k = 7; k >= 0; --k)
             {
                 if (scanline & (1 << k))
@@ -123,8 +131,8 @@ int pictoro_save_frame(const p_frame *frame, const char *filename)
         return 1;
 
     char header[PPM_HEADER_MAXSIZE];
-    char *pam_fmt = "P6\n%u %u\n255\n";
-    snprintf(header, sizeof(header), pam_fmt, frame->width, frame->height);
+    char *ppm_header_fmt = "P6\n%u %u\n255\n";
+    snprintf(header, sizeof(header), ppm_header_fmt, frame->width, frame->height);
     header[PPM_HEADER_MAXSIZE - 1] = 0;
     fwrite(header, sizeof(char), strlen(header), f);
 
