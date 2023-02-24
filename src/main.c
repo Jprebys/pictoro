@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,7 +7,13 @@
 
 #include <SDL2/SDL.h>
 
+#include "logging.h"
 #include "pictoro.h"
+
+#define FRAME_RATE    100
+#define FRAME_TIME_MS 1000.0f / FRAME_RATE
+#define MOUSE_SIZE    50
+#define MOUSE_COLOR   0x808080FF
 
 
 void error_and_die(char *reason)
@@ -33,6 +40,44 @@ void make_sample_frame(p_frame *frame)
 }
 
 
+void check_time(const uint64_t frame_start)
+{
+    uint64_t frame_end = SDL_GetPerformanceCounter();
+    float elapsed_ms = (frame_end - frame_start) / (float)SDL_GetPerformanceFrequency() * 1000.0f;
+    double delay_time = floor(FRAME_TIME_MS - elapsed_ms);
+    if (delay_time > 0)
+        SDL_Delay(delay_time);
+}
+
+
+void update_texture(p_frame *frame, SDL_Texture *buffer, SDL_Renderer *renderer)
+{
+    int *tex_pixels;
+    int tex_pitch;
+
+    SDL_LockTexture(buffer, NULL, (void **)&tex_pixels, &tex_pitch);
+    memcpy(tex_pixels, frame->pixels, frame->width * frame->height * sizeof(uint32_t));
+    SDL_UnlockTexture(buffer);
+    SDL_RenderCopy(renderer, buffer, NULL, NULL);
+    SDL_RenderPresent(renderer);
+    frame->changed = false;
+}
+
+
+void draw_mouse(p_frame *frame)
+{
+    int mouse_x, mouse_y;
+
+    // Check if mouse has moved since last call
+    SDL_GetRelativeMouseState(&mouse_x, &mouse_y);
+    if (mouse_x || mouse_y)
+    {
+        SDL_GetMouseState(&mouse_x, &mouse_y);
+        pictoro_fill_circle(frame, mouse_x, mouse_y, MOUSE_SIZE, MOUSE_COLOR);
+    }
+}
+
+
 int main()
 {
     printf("\n\n");
@@ -48,21 +93,27 @@ int main()
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
         error_and_die("SDL init");
 
-    printf("[INFO] Creating window\n");
-    SDL_Window *window = SDL_CreateWindow("SDL2 Window",
+    logger(DEBUG, "Creating window");
+    SDL_Window *window = SDL_CreateWindow("Drawing Buddy",
                                           SDL_WINDOWPOS_CENTERED,
                                           SDL_WINDOWPOS_CENTERED,
                                           frame->width, frame->height, 0);
 
     if (window == NULL)
-        error_and_die("Create window");                                       
+        error_and_die("Create window");    
+
+    logger(DEBUG, "Creating window surface");                                   
 
     SDL_Surface *window_surface = SDL_GetWindowSurface(window);
 
     if (window_surface == NULL)
         error_and_die("GetWindowSurface");
 
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window,
+                                                -1, 
+                                                SDL_RENDERER_ACCELERATED 
+                                                // | SDL_RENDERER_PRESENTVSYNC
+                                                );
     if (renderer == NULL)
         error_and_die("Get renderer");
 
@@ -73,20 +124,17 @@ int main()
     if (buffer == NULL)
         error_and_die("Create Texture");
 
-    int *tex_pixels;
-    int tex_pitch;
-
     bool run = true;
     SDL_Event e;
     while(run)
     {
-        make_sample_frame(frame);
+        uint64_t frame_start = SDL_GetPerformanceCounter();
+        draw_mouse(frame);
 
-        SDL_LockTexture(buffer, NULL, (void **)&tex_pixels, &tex_pitch);
-        memcpy(tex_pixels, frame->pixels, frame->width * frame->height * sizeof(uint32_t));
-        SDL_UnlockTexture(buffer);
-        SDL_RenderCopy(renderer, buffer, NULL, NULL);
-        SDL_RenderPresent(renderer);
+        if (frame->changed)
+        {
+            update_texture(frame, buffer, renderer);
+        }
 
         while(SDL_PollEvent(&e) > 0)
         {
@@ -96,22 +144,15 @@ int main()
                     run = false;
                     break;
             }
-            SDL_UpdateWindowSurface(window);
+            // SDL_UpdateWindowSurface(window);
         }
-        SDL_Delay(250);
+        check_time(frame_start);
     }
 
-
+    logger(INFO, "Cleaning up assets");
+    SDL_DestroyRenderer(renderer);
     SDL_DestroyTexture(buffer);
-
-    return 0;
-
-    
-    if (pictoro_save_frame(frame, "frame.ppm"))
-        error_and_die("save_frame");
-
-    printf("[INFO] Successfully created and saved frame\n");
-
+    SDL_DestroyWindow(window);
     pictoro_free_frame(frame);
     return 0;
 }

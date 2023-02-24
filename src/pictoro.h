@@ -1,6 +1,7 @@
 #ifndef _PICTORO_H
 #define _PICTORO_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -13,6 +14,7 @@ typedef struct
 {
     uint32_t *pixels;
     size_t width, height;
+    bool changed;
 } p_frame;
 
 
@@ -42,6 +44,16 @@ void pictoro_free_frame(p_frame *frame)
 }
 
 
+void pictoro_set_pixel(p_frame *frame, const int x, const int y, const uint32_t color)
+{
+    if (x >= 0 && x < (int) frame->width && y >= 0 && y < (int) frame->height)
+    {
+        frame->pixels[y * frame->width + x] = color;
+        frame->changed = true;
+    }
+}
+
+
 void pictoro_fill_frame(p_frame *frame, const uint32_t color)
 {
     for (size_t i = 0; i < frame->width * frame->height; ++i)
@@ -65,10 +77,25 @@ void pictoro_fill_rect(p_frame *frame, size_t x, size_t y, size_t w, size_t h, u
                 if (j >= frame->width)
                     break;
                 
-                frame->pixels[i * frame->width + j] = color;
+                pictoro_set_pixel(frame, j, i, color);
             }
         }
     }
+}
+
+
+void pictoro_fill_circle(p_frame *frame, const int x, const int y, const int radius, const uint32_t color)
+{
+    for (int i = -radius; i <= radius; ++i)
+    {
+        for (int j = -radius; j <= radius; ++j)
+        {
+            if (i * i + j * j <= radius * radius)
+                pictoro_set_pixel(frame, x + j, y + i, color);
+
+        }
+    }
+
 }
 
 

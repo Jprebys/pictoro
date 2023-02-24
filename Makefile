@@ -1,13 +1,17 @@
 TARGET = pictoro
 SRC_DIR = src
 CC = gcc
-CFLAGS = -g -Wall -Wextra -std=c11
-LIBS = -lSDL2
+CFLAGS = -Wall -Wextra -std=c11
+LIBS = -lSDL2 -lm
 
 .PHONY: default all clean
 
 default: $(TARGET)
 all: default
+
+debug: CFLAGS += -DDEBUG -g
+debug: default
+
 
 OBJECTS = $(patsubst %.c, %.o, $(wildcard $(SRC_DIR)/*.c))
 HEADERS = $(wildcard $(SRC_DIR)/*.h)
