@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "constants.h"
+#include "logging.h"
 
 #define PPM_HEADER_MAXSIZE 256
 
@@ -13,12 +14,12 @@
 typedef struct
 {
     uint32_t *pixels;
-    size_t width, height;
+    int width, height;
     bool changed;
 } p_frame;
 
 
-int pictoro_create_frame(p_frame **frame, const size_t width, const size_t height)
+int pictoro_create_frame(p_frame **frame, const int width, const int height)
 {
     uint32_t *pixels = malloc(width * height * sizeof(uint32_t));
     p_frame *result = malloc(sizeof(p_frame));
@@ -44,9 +45,22 @@ void pictoro_free_frame(p_frame *frame)
 }
 
 
+void pictoro_copy_frame(p_frame *dest, p_frame *src)
+{
+    if (src->width == dest->width && src->height == dest->height)
+    {
+        memcpy(dest->pixels, src->pixels, src->width * src->height * sizeof(uint32_t));
+    }
+    else
+    {
+        logger(ERROR, "Attempting pictoro_copy_frame on differently-sized p_frames. Skipping.");
+    }
+}
+
+
 void pictoro_set_pixel(p_frame *frame, const int x, const int y, const uint32_t color)
 {
-    if (x >= 0 && x < (int) frame->width && y >= 0 && y < (int) frame->height)
+    if (x >= 0 && x < frame->width && y >= 0 && y < frame->height)
     {
         frame->pixels[y * frame->width + x] = color;
         frame->changed = true;
@@ -54,30 +68,62 @@ void pictoro_set_pixel(p_frame *frame, const int x, const int y, const uint32_t 
 }
 
 
+uint32_t pictoro_get_pixel(const p_frame *frame, const int x, const int y)
+{
+    uint32_t color;
+    if (x >= 0 && x < frame->width && y >= 0 && y < frame->height)
+        color = frame->pixels[y * frame->width + x];
+    else
+        color = 0;
+    return color;
+}
+
+
 void pictoro_fill_frame(p_frame *frame, const uint32_t color)
 {
-    for (size_t i = 0; i < frame->width * frame->height; ++i)
+    for (int i = 0; i < frame->width * frame->height; ++i)
     {
         frame->pixels[i] = color;
     }
 }
 
 
-void pictoro_fill_rect(p_frame *frame, size_t x, size_t y, size_t w, size_t h, uint32_t color)
+void pictoro_fill_rect(p_frame *frame, int x, int y, int w, int h, uint32_t color)
 {
     if (x < frame->width || y < frame->height)
     {
-        for (size_t i = y; i < y + h; ++i)
+        for (int i = y; i < y + h; ++i)
         {
             if (i >= frame->height)
                 break;
             
-            for (size_t j = x; j < x + w; ++j)
+            for (int j = x; j < x + w; ++j)
             {
                 if (j >= frame->width)
                     break;
                 
                 pictoro_set_pixel(frame, j, i, color);
+            }
+        }
+    }
+}
+
+
+void pictoro_copy_rect(p_frame *dest, p_frame *src, const int x, const int y, const int h, const int w)
+{
+    if (x < dest->width || y < dest->height)
+    {
+        for (int i = y; i < y + h; ++i)
+        {
+            if (i >= dest->height)
+                break;
+            
+            for (int j = x; j < x + w; ++j)
+            {
+                if (j >= dest->width)
+                    break;
+                uint32_t color = pictoro_get_pixel(src, j, i);
+                pictoro_set_pixel(dest, j, i, color);
             }
         }
     }
@@ -99,16 +145,16 @@ void pictoro_fill_circle(p_frame *frame, const int x, const int y, const int rad
 }
 
 
-void pictoro_write_str(p_frame *frame, const size_t x, const size_t y, 
+void pictoro_write_str(p_frame *frame, const int x, const int y, 
                           const char *str, const uint32_t color, const uint8_t font_size)
 {
-    const size_t column_spacing = font_size * 10;
-    const size_t row_spacing = font_size * 14;
+    const int column_spacing = font_size * 10;
+    const int row_spacing = font_size * 14;
 
-    size_t cursor_x = x;
-    size_t letter_x_start = x;
-    size_t cursor_y = y;
-    size_t letter_y_start = y;
+    int cursor_x = x;
+    int letter_x_start = x;
+    int cursor_y = y;
+    int letter_y_start = y;
 
     for (size_t i = 0; i < strlen(str); ++i)
     {
@@ -163,7 +209,7 @@ int pictoro_save_frame(const p_frame *frame, const char *filename)
     header[PPM_HEADER_MAXSIZE - 1] = 0;
     fwrite(header, sizeof(char), strlen(header), f);
 
-    for (size_t i = 0; i < frame->width * frame->height; ++i)
+    for (int i = 0; i < frame->width * frame->height; ++i)
     {
         uint32_t pixel = frame->pixels[i];
 

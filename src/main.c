@@ -12,8 +12,23 @@
 
 #define FRAME_RATE    100
 #define FRAME_TIME_MS 1000.0f / FRAME_RATE
-#define MOUSE_SIZE    50
-#define MOUSE_COLOR   0x808080FF
+
+
+typedef enum DrawState
+{
+    NORMAL,
+    DRAWING
+} DrawState;
+
+
+uint32_t draw_colors[] = {0xFF0000FF, 0x00FF00FF, 0x0000FFFF};
+
+
+DrawState draw_state = NORMAL;
+unsigned int draw_colors_idx = 0;
+size_t n_draw_colors = sizeof(draw_colors) / sizeof(uint32_t);
+bool draw_tool_changed = false;
+unsigned int draw_size = 5;
 
 
 void error_and_die(char *reason)
@@ -25,9 +40,9 @@ void error_and_die(char *reason)
 
 void make_sample_frame(p_frame *frame)
 {
-    for (size_t i = 0; i < frame->width; i += 20)
+    for (int i = 0; i < frame->width; i += 20)
     {
-        for (size_t j = 0; j < frame->height; j += 20)
+        for (int j = 0; j < frame->height; j += 20)
         {
             int32_t color = 0xFF;
             color |= (rand() % 0x100) << 8; 
@@ -64,16 +79,28 @@ void update_texture(p_frame *frame, SDL_Texture *buffer, SDL_Renderer *renderer)
 }
 
 
-void draw_mouse(p_frame *frame)
+void draw_mouse(p_frame *frame, p_frame *background, int *old_mouse_x, int *old_mouse_y)
 {
-    int mouse_x, mouse_y;
-
+    int mouse_x, mouse_y, delta_x, delta_y;
+    
     // Check if mouse has moved since last call
-    SDL_GetRelativeMouseState(&mouse_x, &mouse_y);
-    if (mouse_x || mouse_y)
+    SDL_GetRelativeMouseState(&delta_x, &delta_y);
+    if ((delta_x || delta_y) || draw_tool_changed)
     {
+        draw_tool_changed = false;
         SDL_GetMouseState(&mouse_x, &mouse_y);
-        pictoro_fill_circle(frame, mouse_x, mouse_y, MOUSE_SIZE, MOUSE_COLOR);
+        if (draw_state != DRAWING)
+        {
+            pictoro_copy_rect(frame, background,
+                            *old_mouse_x - draw_size - 2,
+                            *old_mouse_y - draw_size - 2,
+                            2 * draw_size + 4,
+                            2 * draw_size + 4);
+        }
+        *old_mouse_x = mouse_x;
+        *old_mouse_y = mouse_y;
+        
+        pictoro_fill_circle(frame, mouse_x, mouse_y, draw_size, draw_colors[draw_colors_idx]);
     }
 }
 
@@ -82,13 +109,17 @@ int main()
 {
     printf("\n\n");
 
-    p_frame *frame;
+    p_frame *frame, *background;
 
     srand(time(NULL)); 
 
     if (pictoro_create_frame(&frame, 800, 600))
         error_and_die("create_frame");
 
+    pictoro_create_frame(&background, 800, 600);
+
+    make_sample_frame(frame);
+    pictoro_copy_frame(frame, background);
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
         error_and_die("SDL init");
@@ -109,11 +140,7 @@ int main()
     if (window_surface == NULL)
         error_and_die("GetWindowSurface");
 
-    SDL_Renderer *renderer = SDL_CreateRenderer(window,
-                                                -1, 
-                                                SDL_RENDERER_ACCELERATED 
-                                                // | SDL_RENDERER_PRESENTVSYNC
-                                                );
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (renderer == NULL)
         error_and_die("Get renderer");
 
@@ -124,12 +151,15 @@ int main()
     if (buffer == NULL)
         error_and_die("Create Texture");
 
+
+    int old_mouse_x, old_mouse_y;
+    SDL_ShowCursor(SDL_DISABLE);
     bool run = true;
     SDL_Event e;
     while(run)
     {
         uint64_t frame_start = SDL_GetPerformanceCounter();
-        draw_mouse(frame);
+        draw_mouse(frame, background, &old_mouse_x, &old_mouse_y);
 
         if (frame->changed)
         {
@@ -143,8 +173,30 @@ int main()
                 case SDL_QUIT:
                     run = false;
                     break;
+                case SDL_MOUSEBUTTONDOWN:
+                    draw_state = DRAWING;
+                    break;
+                case SDL_MOUSEBUTTONUP:
+                    draw_state = NORMAL;
+                    pictoro_copy_frame(background, frame);
+                    break;
+                case SDL_KEYDOWN:
+                    if (e.key.keysym.sym == SDLK_c)
+                    {
+                        draw_colors_idx = (draw_colors_idx + 1) % n_draw_colors;
+                        draw_tool_changed = true;
+                    }
+                    else if (e.key.keysym.sym == SDLK_DOWN && draw_size > 1)
+                    {
+                        draw_size--; 
+                        draw_tool_changed = true;
+                    }
+                    else if (e.key.keysym.sym == SDLK_UP && draw_size < 20)
+                    {
+                        draw_size++;
+                        draw_tool_changed = true;
+                    }
             }
-            // SDL_UpdateWindowSurface(window);
         }
         check_time(frame_start);
     }
@@ -154,5 +206,6 @@ int main()
     SDL_DestroyTexture(buffer);
     SDL_DestroyWindow(window);
     pictoro_free_frame(frame);
+    pictoro_free_frame(background);
     return 0;
 }
