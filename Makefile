@@ -9,7 +9,7 @@ LIBS = -lSDL2 -lm
 default: $(TARGET)
 all: default
 
-debug: CFLAGS += -DDEBUG -g
+debug: CFLAGS += -DDEBUG_MODE -g
 debug: default
 
 

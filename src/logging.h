@@ -27,7 +27,7 @@ void logger(LogLevel_t level, char* msg, ...)
 
     switch (level)
     {
-#ifdef DEBUG
+#ifdef DEBUG_MODE
         case DEBUG:
             printf("[DEBUG] %s\n", buff);
             break;

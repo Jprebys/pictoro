@@ -32,6 +32,7 @@ int pictoro_create_frame(p_frame **frame, const int width, const int height)
     result->pixels = pixels;
     result->width = width;
     result->height = height;
+    result->changed = true;
 
     *frame = result;
     return 0;
@@ -84,6 +85,30 @@ void pictoro_fill_frame(p_frame *frame, const uint32_t color)
     for (int i = 0; i < frame->width * frame->height; ++i)
     {
         frame->pixels[i] = color;
+    }
+}
+
+
+void pictoro_fill_hline(p_frame *frame, const int y, const uint32_t color)
+{
+    if (y >= 0 && y < frame->height)
+    {
+        for (int i = 0; i < frame->width; ++i)
+        {
+            pictoro_set_pixel(frame, i, y, color);
+        }
+    }
+}
+
+
+void pictoro_fill_vline(p_frame *frame, const int x, const uint32_t color)
+{
+    if (x >= 0 && x < frame->width)
+    {
+        for (int i = 0; i < frame->height; ++i)
+        {
+            pictoro_set_pixel(frame, x, i, color);
+        }
     }
 }
 

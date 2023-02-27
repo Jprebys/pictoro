@@ -9,9 +9,15 @@
 
 #include "logging.h"
 #include "pictoro.h"
+#include "wave.h"
 
-#define FRAME_RATE    100
+#define FRAME_RATE    30
 #define FRAME_TIME_MS 1000.0f / FRAME_RATE
+#define N_CELL_ROWS 4
+#define N_CELL_COLS 4
+#define BLACK 0x000000FF
+#define WHITE 0xFFFFFFFF
+
 
 
 typedef enum DrawState
@@ -21,12 +27,12 @@ typedef enum DrawState
 } DrawState;
 
 
-uint32_t draw_colors[] = {0xFF0000FF, 0x00FF00FF, 0x0000FFFF};
+static const uint32_t draw_colors[] = {0x000000FF, 0xFFFFFFFF, 0xFF0000FF, 0x00FF00FF, 0x0000FFFF};
 
 
 DrawState draw_state = NORMAL;
-unsigned int draw_colors_idx = 0;
-size_t n_draw_colors = sizeof(draw_colors) / sizeof(uint32_t);
+static unsigned int draw_colors_idx = 0;
+static const size_t n_draw_colors = sizeof(draw_colors) / sizeof(uint32_t);
 bool draw_tool_changed = false;
 unsigned int draw_size = 5;
 
@@ -78,6 +84,38 @@ void update_texture(p_frame *frame, SDL_Texture *buffer, SDL_Renderer *renderer)
     frame->changed = false;
 }
 
+void make_grid(p_frame *frame, const double cell_width, const double cell_height)
+{
+    for (double i = 0; i < frame->height; i += cell_height)
+    {
+        pictoro_fill_hline(frame, i, WHITE);
+    }
+    for (double j = 0; j < frame->width; j += cell_width)
+    {
+        pictoro_fill_vline(frame, j, WHITE);
+    }
+    pictoro_fill_vline(frame, frame->width - 1, WHITE);
+    pictoro_fill_hline(frame, frame->height - 1, WHITE);
+}
+
+void draw_grid(p_frame *frame, CellGrid grid, const double cell_width, const double cell_height)
+{
+    if (grid.changed)
+    {
+        pictoro_fill_frame(frame, BLACK);
+        for (int i = 0; i < grid.rows; ++i)
+        {
+            for (int j = 0; j < grid.cols; ++j)
+            {
+                uint32_t color = draw_colors[grid.cells[i * grid.cols + j]];
+                pictoro_fill_rect(frame, j * cell_width, i * cell_height, cell_width, cell_height, color);
+            }
+        }
+        make_grid(frame, cell_width, cell_height);
+        grid.changed = false;
+    }
+}
+
 
 void draw_mouse(p_frame *frame, p_frame *background, int *old_mouse_x, int *old_mouse_y)
 {
@@ -105,21 +143,41 @@ void draw_mouse(p_frame *frame, p_frame *background, int *old_mouse_x, int *old_
 }
 
 
+
+
+
+
+
+
+
+
+
 int main()
 {
-    printf("\n\n");
+    int width, height;
+    p_frame *frame;
 
-    p_frame *frame, *background;
+    width = 500;
+    height = 500;
 
-    srand(time(NULL)); 
+    pictoro_create_frame(&frame, width, height);
+    pictoro_fill_frame(frame, BLACK);
 
-    if (pictoro_create_frame(&frame, 800, 600))
-        error_and_die("create_frame");
 
-    pictoro_create_frame(&background, 800, 600);
+    const double cell_width = ceil((double)width / N_CELL_COLS);
+    const double cell_height = ceil((double)height / N_CELL_ROWS);
+    make_grid(frame, cell_width, cell_height);
 
-    make_sample_frame(frame);
-    pictoro_copy_frame(frame, background);
+
+    int cells[N_CELL_COLS * N_CELL_ROWS] = {};
+    CellGrid cell_grid = { 
+        .rows = N_CELL_ROWS, 
+        .cols = N_CELL_COLS, 
+        .cells = cells, 
+        .changed = true 
+    };
+
+
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
         error_and_die("SDL init");
@@ -130,41 +188,33 @@ int main()
                                           SDL_WINDOWPOS_CENTERED,
                                           frame->width, frame->height, 0);
 
-    if (window == NULL)
-        error_and_die("Create window");    
-
-    logger(DEBUG, "Creating window surface");                                   
-
-    SDL_Surface *window_surface = SDL_GetWindowSurface(window);
-
-    if (window_surface == NULL)
-        error_and_die("GetWindowSurface");
+    if (!window)
+        error_and_die("Create window");   
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (renderer == NULL)
+    if (!renderer)
         error_and_die("Get renderer");
 
     SDL_Texture *buffer = SDL_CreateTexture(renderer, 
                                             SDL_PIXELFORMAT_RGBA8888,
                                             SDL_TEXTUREACCESS_STREAMING,
                                             frame->width, frame->height);
-    if (buffer == NULL)
+    if (!buffer)
         error_and_die("Create Texture");
 
+    int mouse_x, mouse_y;
+    int grid_x, grid_y;
 
-    int old_mouse_x, old_mouse_y;
-    SDL_ShowCursor(SDL_DISABLE);
     bool run = true;
     SDL_Event e;
     while(run)
     {
         uint64_t frame_start = SDL_GetPerformanceCounter();
-        draw_mouse(frame, background, &old_mouse_x, &old_mouse_y);
+
+        draw_grid(frame, cell_grid, cell_width, cell_height);
 
         if (frame->changed)
-        {
             update_texture(frame, buffer, renderer);
-        }
 
         while(SDL_PollEvent(&e) > 0)
         {
@@ -174,38 +224,141 @@ int main()
                     run = false;
                     break;
                 case SDL_MOUSEBUTTONDOWN:
-                    draw_state = DRAWING;
-                    break;
-                case SDL_MOUSEBUTTONUP:
-                    draw_state = NORMAL;
-                    pictoro_copy_frame(background, frame);
+                    SDL_GetMouseState(&mouse_x, &mouse_y);
+                    grid_x = mouse_x / cell_width;
+                    grid_y = mouse_y / cell_height;
+                    if (grid_x >= 0 && grid_x < N_CELL_COLS && grid_y >= 0 && grid_y < N_CELL_ROWS)
+                    {
+                        cell_grid.cells[grid_y * N_CELL_COLS + grid_x] = draw_colors_idx;
+                        cell_grid.changed = true;
+                    }
                     break;
                 case SDL_KEYDOWN:
                     if (e.key.keysym.sym == SDLK_c)
                     {
                         draw_colors_idx = (draw_colors_idx + 1) % n_draw_colors;
-                        draw_tool_changed = true;
                     }
-                    else if (e.key.keysym.sym == SDLK_DOWN && draw_size > 1)
+                    if (e.key.keysym.sym == SDLK_RETURN)
                     {
-                        draw_size--; 
-                        draw_tool_changed = true;
+                        run = false;
                     }
-                    else if (e.key.keysym.sym == SDLK_UP && draw_size < 20)
-                    {
-                        draw_size++;
-                        draw_tool_changed = true;
-                    }
+                    break;
             }
         }
         check_time(frame_start);
     }
 
-    logger(INFO, "Cleaning up assets");
+
+    run_wfc_algo(&cell_grid, 2);
+
     SDL_DestroyRenderer(renderer);
     SDL_DestroyTexture(buffer);
     SDL_DestroyWindow(window);
     pictoro_free_frame(frame);
-    pictoro_free_frame(background);
-    return 0;
 }
+
+
+// int main2()
+// {
+//     printf("\n\n");
+
+//     p_frame *frame, *background;
+
+//     srand(time(NULL)); 
+
+//     if (pictoro_create_frame(&frame, 800, 600))
+//         error_and_die("create_frame");
+
+//     pictoro_create_frame(&background, 800, 600);
+
+//     make_sample_frame(frame);
+//     pictoro_copy_frame(frame, background);
+
+//     if (SDL_Init(SDL_INIT_VIDEO) < 0)
+//         error_and_die("SDL init");
+
+//     logger(DEBUG, "Creating window");
+//     SDL_Window *window = SDL_CreateWindow("Drawing Buddy",
+//                                           SDL_WINDOWPOS_CENTERED,
+//                                           SDL_WINDOWPOS_CENTERED,
+//                                           frame->width, frame->height, 0);
+
+//     if (window == NULL)
+//         error_and_die("Create window");    
+
+//     logger(DEBUG, "Creating window surface");                                   
+
+//     SDL_Surface *window_surface = SDL_GetWindowSurface(window);
+
+//     if (window_surface == NULL)
+//         error_and_die("GetWindowSurface");
+
+//     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+//     if (renderer == NULL)
+//         error_and_die("Get renderer");
+
+//     SDL_Texture *buffer = SDL_CreateTexture(renderer, 
+//                                             SDL_PIXELFORMAT_RGBA8888,
+//                                             SDL_TEXTUREACCESS_STREAMING,
+//                                             frame->width, frame->height);
+//     if (buffer == NULL)
+//         error_and_die("Create Texture");
+
+
+//     int old_mouse_x, old_mouse_y;
+//     SDL_ShowCursor(SDL_DISABLE);
+//     bool run = true;
+//     SDL_Event e;
+//     while(run)
+//     {
+//         uint64_t frame_start = SDL_GetPerformanceCounter();
+//         draw_mouse(frame, background, &old_mouse_x, &old_mouse_y);
+
+//         if (frame->changed)
+//         {
+//             update_texture(frame, buffer, renderer);
+//         }
+
+//         while(SDL_PollEvent(&e) > 0)
+//         {
+//             switch(e.type)
+//             {
+//                 case SDL_QUIT:
+//                     run = false;
+//                     break;
+//                 case SDL_MOUSEBUTTONDOWN:
+//                     draw_state = DRAWING;
+//                     break;
+//                 case SDL_MOUSEBUTTONUP:
+//                     draw_state = NORMAL;
+//                     pictoro_copy_frame(background, frame);
+//                     break;
+//                 case SDL_KEYDOWN:
+//                     if (e.key.keysym.sym == SDLK_c)
+//                     {
+//                         draw_colors_idx = (draw_colors_idx + 1) % n_draw_colors;
+//                         draw_tool_changed = true;
+//                     }
+//                     else if (e.key.keysym.sym == SDLK_DOWN && draw_size > 1)
+//                     {
+//                         draw_size--; 
+//                         draw_tool_changed = true;
+//                     }
+//                     else if (e.key.keysym.sym == SDLK_UP && draw_size < 20)
+//                     {
+//                         draw_size++;
+//                         draw_tool_changed = true;
+//                     }
+//             }
+//         }
+//         check_time(frame_start);
+//     }
+
+//     logger(INFO, "Cleaning up assets");
+//     SDL_DestroyRenderer(renderer);
+//     SDL_DestroyTexture(buffer);
+//     SDL_DestroyWindow(window);
+//     pictoro_free_frame(frame);
+//     pictoro_free_frame(background);
+//     return 0;
+// }
