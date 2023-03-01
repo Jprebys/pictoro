@@ -28,16 +28,9 @@ typedef struct Pattern
 
 typedef struct PatternList
 {
-    Pattern *patterns;
+    int *patterns;
     int count, capacity;
 } PatternList;
-
-
-typedef struct Rule
-{
-    Pattern pattern;
-    PatternList adjacencies[8];
-} Rule;
 
 
 int get_cell_by_pos(CellGrid *grid, int x, int y);
