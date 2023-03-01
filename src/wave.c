@@ -189,17 +189,9 @@ bool check_horizontal_match(int *left, int *right, int pattern_size)
     return true;
 }
 
-
-void run_wfc_algo(CellGrid *grid, int pattern_size)
+void establish_rules(int n_patterns, Pattern *patterns, int n_rules, PatternList *rules[n_rules], int pattern_size)
 {
-
-    Pattern *patterns;
-    int max_patterns = (grid->rows - (pattern_size - 1)) * (grid->cols - (pattern_size - 1));
-
-    int n_patterns = get_patterns(grid, max_patterns, pattern_size, &patterns);
-
-    PatternList *rules[n_patterns * N_DIRECTIONS]; 
-    for (int i = 0; i < n_patterns * N_DIRECTIONS; ++i)
+    for (int i = 0; i < n_rules; ++i)
         rules[i] = create_patternlist(10);
 
 
@@ -233,6 +225,22 @@ void run_wfc_algo(CellGrid *grid, int pattern_size)
 
     }
 
+}
+
+void run_wfc_algo(CellGrid *grid, int pattern_size)
+{
+
+    Pattern *patterns;
+    int max_patterns = (grid->rows - (pattern_size - 1)) * (grid->cols - (pattern_size - 1));
+
+    int n_patterns = get_patterns(grid, max_patterns, pattern_size, &patterns);
+
+
+    int n_rules = n_patterns * N_DIRECTIONS;
+    PatternList *rules[n_rules]; 
+
+    establish_rules(n_patterns, patterns, n_rules, rules, pattern_size);
+    
 
     for (int i = 0; i < n_patterns; ++i)
     {
@@ -264,25 +272,26 @@ int main(void)
 {
 
     printf("\n\nRunning wave...\n");
-    // int cells[] = {
-    //     1, 0, 2, 0,
-    //     0, 1, 0, 2,
-    //     3, 0, 1, 2
-    // };
-    // int rows = 3, cols = 4, p_size = 2;
-
     int cells[] = {
+        1, 0, 2, 0,
+        0, 1, 0, 2,
+        3, 0, 1, 2
+    };
+    int rows = 3, cols = 4, p_size = 2;
+    CellGrid cell_grid = { .cells = cells, .rows = rows, .cols = cols, .changed = false };
+    run_wfc_algo(&cell_grid, p_size);
+
+
+
+
+    int cells2[] = {
         1, 0, 1, 0, 1,
         0, 1, 0, 1, 0,
         1, 0, 1, 0, 1
     };
-    int rows = 3, cols = 5, p_size = 3;
-
-
-
-    CellGrid cell_grid = { .cells = cells, .rows = rows, .cols = cols, .changed = false };
-
-    run_wfc_algo(&cell_grid, p_size);
+    rows = 3, cols = 5, p_size = 3;
+    CellGrid cell_grid2 = { .cells = cells2, .rows = rows, .cols = cols, .changed = false };
+    run_wfc_algo(&cell_grid2, p_size);
 
 
 
