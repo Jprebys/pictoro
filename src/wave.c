@@ -245,16 +245,6 @@ size_t rand_range(const int min_n, const int max_n)
 }
 
 
-// bool check_finished(size_t *counts, size_t grid_size)
-// {
-//     for (size_t i = 0; i < grid_size; ++i)
-//     {
-//         if (counts[i] > 1) return false;
-//     }
-//     return true;
-// }
-
-
 void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const unsigned int output_width, const unsigned int output_height)
 {
 
@@ -319,48 +309,71 @@ void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
     size_t collapsed_cells = 1;
     while (collapsed_cells < output_grid_size)
     {
+        size_t adj_cells[N_DIRECTIONS];
+        for (size_t i = 0; i < N_DIRECTIONS; ++i)
+            adj_cells[i] = SIZE_MAX;
 
-        if (current_idx >= output_grid_width)
+        if (current_idx >= output_grid_width)                              adj_cells[0] = current_idx - output_grid_width;
+        if (current_idx % output_grid_width)                               adj_cells[1] = current_idx - 1;
+        if ((current_idx % output_grid_width) != (output_grid_width - 1))  adj_cells[2] = current_idx + 1;
+        if (current_idx < output_grid_size - output_grid_width)            adj_cells[3] = current_idx + output_grid_width;
+           
+        for (size_t x = 0; x < N_DIRECTIONS; ++x)
         {
-            // we are not on the top row
-            size_t one_up_idx = current_idx - output_grid_width;
-
-            // start by setting all possibilities of adjacent cell to false and zeroing count
-            memset(output_grid[one_up_idx], false, n_patterns * sizeof(bool));
-            counts[one_up_idx] = 0;
+            size_t adj_idx = adj_cells[x];
+            if (adj_idx == SIZE_MAX)
+                continue;
+            memset(output_grid[adj_idx], false, n_patterns * sizeof(bool));
+            counts[adj_idx] = 0;
 
             // we need to loop over the current index possible patterns
-            // and for each one: mark the one_up_idx cell true if tha pattern is possible
+            // and for each one: mark the adj_idx cell true if tha pattern is possible
 
             for (size_t i = 0; i < n_patterns; ++i)
             {
                 if (output_grid[current_idx][i])
                 {
-                    PatternList *up_rule = rules[i * N_DIRECTIONS + 0];
+                    PatternList *up_rule = rules[i * N_DIRECTIONS + x];
                     for (size_t j = 0; j < up_rule->count; ++j)
                     {
                         size_t pattern = up_rule->patterns[j];
-                        if (!output_grid[one_up_idx][pattern])
+                        if (!output_grid[adj_idx][pattern])
                         {
-                            output_grid[one_up_idx][pattern] = true;
-                            counts[one_up_idx]++;
+                            output_grid[adj_idx][pattern] = true;
+                            counts[adj_idx]++;
+                            changed[adj_idx] = true;
                         }
                     }
                 }
             }
+            printf("\nGrid pos %ld possibilities\n", current_idx);
             for (size_t i = 0; i < n_patterns; ++i)
                 printf("Pattern %ld: %s\n", i, output_grid[current_idx][i]? "true" : "false");
+            printf("\nAdj pos %ld possibilities\n", adj_idx);
             for (size_t i = 0; i < n_patterns; ++i)
-                printf("Pattern %ld: %s\n", i, output_grid[one_up_idx][i]? "true" : "false");
- 
+                printf("Pattern %ld: %s\n", i, output_grid[adj_idx][i]? "true" : "false");
+
+            if (!counts[adj_idx])
+            {
+                logger(WARNING, "Contradiction reached. Exiting...");
+                goto cleanup;
+            }            
+            else if (counts[adj_idx] == 1)
+            {
+                collapsed_cells++;
+            }
+            changed[current_idx] = false;
+            for (int i = 0; i < output_grid_size; ++i)
+            {
+                if (changed[i])
+                {
+                    current_idx = i;
+                    break;
+                }
+            }
         }
-        
-
-        break;
-        // for (size_t i = 0; i < n_patterns; ++i)
-        //     printf("Pattern %ld: %s\n", i, output_grid[current_idx][i]? "true" : "false");
-
     }
+    printf("Finished algorithm, collapsed all %lu cells...\n", collapsed_cells);
  
 
 
@@ -383,24 +396,24 @@ int main(void)
 {
 
     printf("\n\nRunning wave...\n");
-    uint32_t cells[] = {
-        1, 0, 2, 0,
-        0, 1, 0, 2,
-        3, 0, 1, 2
-    };
-    int rows = 3, cols = 4, p_size = 2;
-    CellGrid cell_grid = { .cells = cells, .rows = rows, .cols = cols, .changed = false };
-    run_wfc_algo(&cell_grid, p_size, 24, 32);
+    // uint32_t cells[] = {
+    //     1, 0, 2, 0,
+    //     0, 1, 0, 2,
+    //     3, 0, 1, 2
+    // };
+    // int rows = 3, cols = 4, p_size = 2;
+    // CellGrid cell_grid = { .cells = cells, .rows = rows, .cols = cols, .changed = false };
+    // run_wfc_algo(&cell_grid, p_size, 24, 32);
 
 
-    return 0;
+    // return 0;
 
     uint32_t cells2[] = {
         1, 0, 1, 0, 1,
-        0, 1, 0, 1, 0,
-        1, 0, 1, 0, 1
+        0, 4, 0, 4, 3,
+        1, 0, 1, 2, 1
     };
-    rows = 3, cols = 5, p_size = 3;
+    int rows = 3, cols = 5, p_size = 2;
     CellGrid cell_grid2 = { .cells = cells2, .rows = rows, .cols = cols, .changed = false };
     run_wfc_algo(&cell_grid2, p_size, 24, 32);
 
