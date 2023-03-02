@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 #include "wave.h"
 #include "logging.h"
@@ -174,7 +175,6 @@ int get_pattern_idx(Pattern *patterns, int n_patterns, uint32_t *values, int n)
             return i;
         }
     }
-
     return -1; // unreachable
 }
 
@@ -211,10 +211,10 @@ void establish_rules(int n_patterns, Pattern *patterns, int n_rules, PatternList
     for (int i = 0; i < n_patterns; ++i)
     {
         Pattern pattern = patterns[i];
-        PatternList *current_u_rule = rules[i * 4 + 0];
-        PatternList *current_l_rule = rules[i * 4 + 1];
-        PatternList *current_r_rule = rules[i * 4 + 2];
-        PatternList *current_d_rule = rules[i * 4 + 3];
+        PatternList *current_u_rule = rules[i * N_DIRECTIONS + 0];
+        PatternList *current_l_rule = rules[i * N_DIRECTIONS + 1];
+        PatternList *current_r_rule = rules[i * N_DIRECTIONS + 2];
+        PatternList *current_d_rule = rules[i * N_DIRECTIONS + 3];
 
         for (int j = 0; j < n_patterns; ++j)
         {
@@ -239,13 +239,31 @@ void establish_rules(int n_patterns, Pattern *patterns, int n_rules, PatternList
 }
 
 
+size_t rand_range(const int min_n, const int max_n)
+{
+    return (size_t) (rand() % (max_n - min_n + 1) + min_n);
+}
+
+
+// bool check_finished(size_t *counts, size_t grid_size)
+// {
+//     for (size_t i = 0; i < grid_size; ++i)
+//     {
+//         if (counts[i] > 1) return false;
+//     }
+//     return true;
+// }
+
+
 void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const unsigned int output_width, const unsigned int output_height)
 {
 
-    Pattern *patterns;
-    int max_patterns = (grid->rows - (pattern_size - 1)) * (grid->cols - (pattern_size - 1));
+    srand(time(NULL));
 
-    int n_patterns = generate_patterns(grid, max_patterns, pattern_size, &patterns);
+    Pattern *patterns;
+    size_t max_patterns = (grid->rows - (pattern_size - 1)) * (grid->cols - (pattern_size - 1));
+
+    size_t n_patterns = generate_patterns(grid, max_patterns, pattern_size, &patterns);
 
 
     int n_rules = n_patterns * N_DIRECTIONS;
@@ -254,7 +272,7 @@ void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
     establish_rules(n_patterns, patterns, n_rules, rules, pattern_size);
     
 
-    for (int i = 0; i < n_patterns; ++i)
+    for (size_t i = 0; i < n_patterns; ++i)
     {
         pattern_print(&patterns[i], pattern_size);
         PatternList current_u_rule = *rules[i * 4 + 0];
@@ -270,15 +288,89 @@ void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
     }
 
 
+    size_t output_grid_width = output_width - pattern_size - 1;
+    size_t output_grid_height = output_height - pattern_size - 1;
+    size_t output_grid_size =  output_grid_width * output_grid_height;
+    bool output_grid[output_grid_size][n_patterns];
+    size_t counts[output_grid_size];
+    bool changed[output_grid_size];
+    for (size_t i = 0; i < output_grid_size; ++i)
+    {
+        for (size_t j = 0; j < n_patterns; ++j)
+        {
+            output_grid[i][j] = true; 
+        }
+        counts[i] = n_patterns;
+        changed[i] = false;
+    }
+
+    // delete from array by swapping with last element and decrementing count
+    // pick random starting place
+    size_t random_start = rand_range(0, output_grid_size - 1);
+    size_t random_pattern = rand_range(0, n_patterns - 1);
+
+    memset(output_grid[random_start], false, n_patterns * sizeof(bool));
+    output_grid[random_start][random_pattern] = true;
+    counts[random_start] = 1;
+
+    //propagate to neighbors
+    size_t current_idx = random_start;
+
+    size_t collapsed_cells = 1;
+    while (collapsed_cells < output_grid_size)
+    {
+
+        if (current_idx >= output_grid_width)
+        {
+            // we are not on the top row
+            size_t one_up_idx = current_idx - output_grid_width;
+
+            // start by setting all possibilities of adjacent cell to false and zeroing count
+            memset(output_grid[one_up_idx], false, n_patterns * sizeof(bool));
+            counts[one_up_idx] = 0;
+
+            // we need to loop over the current index possible patterns
+            // and for each one: mark the one_up_idx cell true if tha pattern is possible
+
+            for (size_t i = 0; i < n_patterns; ++i)
+            {
+                if (output_grid[current_idx][i])
+                {
+                    PatternList *up_rule = rules[i * N_DIRECTIONS + 0];
+                    for (size_t j = 0; j < up_rule->count; ++j)
+                    {
+                        size_t pattern = up_rule->patterns[j];
+                        if (!output_grid[one_up_idx][pattern])
+                        {
+                            output_grid[one_up_idx][pattern] = true;
+                            counts[one_up_idx]++;
+                        }
+                    }
+                }
+            }
+            for (size_t i = 0; i < n_patterns; ++i)
+                printf("Pattern %ld: %s\n", i, output_grid[current_idx][i]? "true" : "false");
+            for (size_t i = 0; i < n_patterns; ++i)
+                printf("Pattern %ld: %s\n", i, output_grid[one_up_idx][i]? "true" : "false");
+ 
+        }
+        
+
+        break;
+        // for (size_t i = 0; i < n_patterns; ++i)
+        //     printf("Pattern %ld: %s\n", i, output_grid[current_idx][i]? "true" : "false");
+
+    }
+ 
+
+
+
     
-
-
-
-
-    for (int i = 0; i < n_patterns * N_DIRECTIONS; ++i) 
+cleanup:
+    for (size_t i = 0; i < n_patterns * N_DIRECTIONS; ++i) 
         patternlist_free(rules[i]);
 
-    for (int i = 0; i < max_patterns; ++i) 
+    for (size_t i = 0; i < max_patterns; ++i) 
         free(patterns[i].values);
 
     free(patterns);
@@ -301,7 +393,7 @@ int main(void)
     run_wfc_algo(&cell_grid, p_size, 24, 32);
 
 
-
+    return 0;
 
     uint32_t cells2[] = {
         1, 0, 1, 0, 1,
