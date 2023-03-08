@@ -103,9 +103,9 @@ void draw_grid(p_frame *frame, CellGrid grid, const double cell_width, const dou
     if (grid.changed)
     {
         pictoro_fill_frame(frame, BLACK);
-        for (int i = 0; i < grid.rows; ++i)
+        for (size_t i = 0; i < grid.rows; ++i)
         {
-            for (int j = 0; j < grid.cols; ++j)
+            for (size_t j = 0; j < grid.cols; ++j)
             {
                 uint32_t color = draw_colors[grid.cells[i * grid.cols + j]];
                 pictoro_fill_rect(frame, j * cell_width, i * cell_height, cell_width, cell_height, color);
@@ -169,7 +169,7 @@ int main()
     make_grid(frame, cell_width, cell_height);
 
 
-    int cells[N_CELL_COLS * N_CELL_ROWS] = {};
+    uint32_t cells[N_CELL_COLS * N_CELL_ROWS] = {};
     CellGrid cell_grid = { 
         .rows = N_CELL_ROWS, 
         .cols = N_CELL_COLS, 
@@ -249,7 +249,7 @@ int main()
     }
 
 
-    run_wfc_algo(&cell_grid, 2);
+    run_wfc_algo(&cell_grid, 2, 20, 20);
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyTexture(buffer);

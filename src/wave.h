@@ -13,7 +13,7 @@ typedef struct CellGrid
 } CellGrid;
 
 
-void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const unsigned int output_width, const unsigned int output_height);
+bool run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const unsigned int output_width, const unsigned int output_height);
 
 
 #endif

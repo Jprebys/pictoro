@@ -246,11 +246,10 @@ size_t rand_range(const int min_n, const int max_n)
 }
 
 
-void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const unsigned int output_width, const unsigned int output_height)
+bool run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const unsigned int output_width, const unsigned int output_height)
 {
 
     assert(false == 0 && "Warning: false does not equal 0 on this platform");
-    srand(0);
 
     Pattern *patterns;
     size_t max_patterns = (grid->rows - (pattern_size - 1)) * (grid->cols - (pattern_size - 1));
@@ -312,28 +311,28 @@ void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
     //propagate to neighbors
     size_t current_idx = random_start;
 
-    size_t collapsed_cells = 1;
-    while(collapsed_cells < output_grid_size)
+    while(1)
     {
-        printf("Running for current idx %lu collapsed = %lu\n", current_idx, collapsed_cells);
+        // printf("Running for current idx %lu\n", current_idx);
         changed[current_idx] = false;
         size_t adj_cells[N_DIRECTIONS];
-        for (size_t i = 0; i < N_DIRECTIONS; ++i)
+        for(size_t i = 0; i < N_DIRECTIONS; ++i)
             adj_cells[i] = SIZE_MAX;
 
-        if (current_idx >= output_grid_width)                              adj_cells[0] = current_idx - output_grid_width;
-        if (current_idx % output_grid_width)                               adj_cells[1] = current_idx - 1;
-        if ((current_idx % output_grid_width) != (output_grid_width - 1))  adj_cells[2] = current_idx + 1;
-        if (current_idx < output_grid_size - output_grid_width)            adj_cells[3] = current_idx + output_grid_width;
+        if(current_idx >= output_grid_width)                              adj_cells[0] = current_idx - output_grid_width;
+        if(current_idx % output_grid_width)                               adj_cells[1] = current_idx - 1;
+        if((current_idx % output_grid_width) != (output_grid_width - 1))  adj_cells[2] = current_idx + 1;
+        if(current_idx < output_grid_size - output_grid_width)            adj_cells[3] = current_idx + output_grid_width;
            
-        for (size_t x = 0; x < N_DIRECTIONS; ++x)
+        for(size_t x = 0; x < N_DIRECTIONS; ++x)
         {
             size_t new_count = 0;
             size_t adj_idx = adj_cells[x];
-            // printf("\nEvaluating adj idx (%lu, %lu)", adj_idx % output_grid_width, adj_idx / output_grid_width);
 
-            if (adj_idx == SIZE_MAX)
+            if(adj_idx == SIZE_MAX)
                 continue;
+            printf("\nEvaluating adj idx (%lu, %lu)", adj_idx % output_grid_width, adj_idx / output_grid_width);
+
             assert(adj_idx < output_grid_size && "Bad adj idx");
 
             // we need to loop over the current index possible patterns
@@ -374,12 +373,12 @@ void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
             }
             // if (current_idx % output_grid_width == 0 || adj_idx % output_grid_width == 0)
             // {
-                printf("\nGrid pos (%ld, %ld) possibilities\n", current_idx % output_grid_width, current_idx / output_grid_width);
-                for (size_t i = 0; i < n_patterns; ++i)
-                    printf("Pattern %ld: %s\n", i, output_grid[current_idx][i]? "true" : "false");
-                printf("\nAdj pos (%ld, %ld) possibilities\n", adj_idx % output_grid_width, adj_idx / output_grid_width);
-                for (size_t i = 0; i < n_patterns; ++i)
-                    printf("Pattern %ld: %s\n", i, output_grid[adj_idx][i]? "true" : "false");
+                // printf("\nGrid pos (%ld, %ld) possibilities\n", current_idx % output_grid_width, current_idx / output_grid_width);
+                // for (size_t i = 0; i < n_patterns; ++i)
+                //     printf("Pattern %ld: %s\n", i, output_grid[current_idx][i]? "true" : "false");
+                // printf("\nAdj pos (%ld, %ld) possibilities\n", adj_idx % output_grid_width, adj_idx / output_grid_width);
+                // for (size_t i = 0; i < n_patterns; ++i)
+                //     printf("Pattern %ld: %s\n", i, output_grid[adj_idx][i]? "true" : "false");
             // }
             if (!new_count)
             {
@@ -388,7 +387,6 @@ void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
             }            
             else if (counts[adj_idx] != 1 && new_count == 1)
             {
-                collapsed_cells++;
                 for (size_t z = 0; z < n_patterns; ++z)
                 {
                     if (output_grid[adj_idx][z])
@@ -413,11 +411,14 @@ void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
         }
         if (done_propagating)
         {
+            bool more_left = false;
             // Pick new starting index
             for (size_t i = 0; i < output_grid_size; ++i)
             {
+                // printf("counts for %lu: %lu\n", i, counts[i]);
                 if (counts[i] > 1)
                 {
+                    more_left = true;
                     current_idx = i;
                     for (size_t j = 0; j < n_patterns; ++j)
                     {
@@ -432,11 +433,12 @@ void run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
                     break;
                 }
             }
-            
+            if(!more_left)
+            {
+                break;
+            }            
         }
     }
-    printf("Finished algorithm, collapsed all %lu/%lu cells...\n", collapsed_cells, output_grid_size);
- 
     for (size_t i = 0; i < output_grid_width; ++i)
     {
         for (size_t j = 0; j < output_grid_height; ++j)
@@ -502,41 +504,54 @@ cleanup:
         free(patterns[i].values);
 
     free(patterns);
-
+    return true;
 }
 
 
 
 
 
-int main(void)
+int main3(void)
 {
-
+    srand(time(NULL));
     printf("\n\nRunning wave...\n");
-    // uint32_t cells[] = {
-    //     1, 0, 2, 0,
-    //     0, 1, 0, 2,
-    //     3, 0, 1, 2
-    // };
-    // int rows = 3, cols = 4, p_size = 2;
-    // CellGrid cell_grid = { .cells = cells, .rows = rows, .cols = cols, .changed = false };
-    // run_wfc_algo(&cell_grid, p_size, 24, 32);
-
-
-    // return 0;
-
-    uint32_t cells2[] = {
-        1, 0, 1, 0, 1,
-        0, 1, 0, 1, 1,
-        1, 0, 1, 1, 1
+    uint32_t cells[] = {
+4, 3, 1, 0, 3, 0, 3, 1, 0, 2, 
+4, 3, 0, 4, 1, 3, 1, 0, 1, 4, 
+4, 4, 3, 3, 4, 3, 2, 3, 0, 2, 
+2, 0, 3, 1, 4, 4, 0, 1, 0, 2, 
+3, 2, 3, 3, 1, 3, 4, 3, 2, 3, 
+1, 1, 4, 2, 3, 1, 4, 2, 2, 2, 
+1, 4, 3, 1, 2, 1, 0, 2, 1, 3, 
+2, 4, 2, 1, 0, 2, 0, 2, 3, 0, 
+4, 0, 3, 4, 0, 1, 1, 3, 4, 2, 
+2, 2, 4, 0, 4, 0, 1, 0, 3, 4,
     };
-    int rows = 3, cols = 5, p_size = 2, width = 24, height = 32;
-    CellGrid cell_grid2 = { .cells = cells2, .rows = rows, .cols = cols };
-    run_wfc_algo(&cell_grid2, p_size, width, height);
+    int rows = 10, cols = 10, p_size = 2;
+    CellGrid cell_grid = { .cells = cells, .rows = rows, .cols = cols, .changed = false };
+    run_wfc_algo(&cell_grid, p_size, 24, 32);
 
 
+    return 0;
+    // srand(time(NULL));
 
-    printf("Finished running wave\n");
+    // uint32_t cells2[] = {
+    //     1, 0, 1, 0, 1,
+    //     0, 2, 0, 2, 3,
+    //     1, 0, 1, 1, 1
+    // };
+    // int rows = 3, cols = 5, p_size = 2, width = 20, height = 20;
+    // CellGrid cell_grid2 = { .cells = cells2, .rows = rows, .cols = cols };
+
+    // // int tries = 1;
+    // // while(!run_wfc_algo(&cell_grid2, p_size, width, height))
+    // // {
+    // //     tries++;
+    // // }
+    // int tries = 1;
+    // run_wfc_algo(&cell_grid2, p_size, width, height);
+
+    // printf("Finished running wave, took %d tries\n", tries);
 
     return 0;
 }

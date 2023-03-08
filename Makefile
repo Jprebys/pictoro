@@ -1,6 +1,6 @@
 TARGET = pictoro
 SRC_DIR = src
-CC = gcc
+CC = clang
 CFLAGS = -Wall -Wextra -std=c11
 LIBS = -lSDL2 -lm
 
