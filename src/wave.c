@@ -3,15 +3,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
 #include <time.h>
 
 #include "wave.h"
-#include "logging.h"
 
-
-#define N_DIRECTIONS 4   // UP LEFT RIGHT DOWN
-
+#ifndef _UNIT_TEST
+#define internal static
 
 typedef struct Pattern
 {
@@ -27,27 +24,31 @@ typedef struct PatternList
 } PatternList;
 
 
-uint32_t cellgrid_get_cell(const CellGrid *grid, const unsigned int x, const unsigned int y)
+#else 
+#define internal
+#endif  // ifndef _UNIT_TEST
+
+#define N_DIRECTIONS 4   // UP LEFT RIGHT DOWN
+#define N_SYMMETRIES 4   // 4 Rotations
+
+
+internal uint32_t 
+cellgrid_get_cell(const CellGrid *grid, const unsigned int x, const unsigned int y)
 {
-    if (x < grid->cols && y < grid->rows)
-    {
+    if (x < grid->cols && y < grid->rows) {
         return grid->cells[y * grid->cols + x];
-    }
-    else
-    {
-        logger(ERROR, "Attempting to access invalid grid cell (%d, %d). Exiting...\n", x, y);
+    } else {
+        // logger(ERROR, "Attempting to access invalid grid cell (%d, %d). Exiting...\n", x, y);
         exit(EXIT_FAILURE);
     }
 }
 
-void pattern_print(Pattern *pattern, int pattern_size)
+internal void 
+pattern_print(Pattern *pattern, int pattern_size)
 {
-
     printf("\nPrinting pattern (count: %d)\n", pattern->count);
-    for (int i = 0; i < pattern_size; ++i)
-    {
-        for (int j = 0; j < pattern_size; ++j)
-        {
+    for (int i = 0; i < pattern_size; ++i) {
+        for (int j = 0; j < pattern_size; ++j) {
             printf(" %u", pattern->values[i * pattern_size + j]);
         }
         putchar('\n');
@@ -55,32 +56,36 @@ void pattern_print(Pattern *pattern, int pattern_size)
 }
 
 
-bool pattern_equals(Pattern first, Pattern second, int pattern_size)
+internal bool
+pattern_equals(Pattern first, Pattern second, int pattern_size)
 {
-    for (int i = 0; i < pow(pattern_size, 2); ++i)
+    for (int i = 0; i < pattern_size * pattern_size; ++i)
         if (first.values[i] != second.values[i])
             return false;
     return true;
 }
 
 
-Pattern *pattern_create(int pattern_size)
-{
-    Pattern *result = malloc(sizeof(Pattern));
-    result->values = calloc(pow(pattern_size, 2), sizeof(int));
-    result->count = 1;
-    return result;
-}
+// internal Pattern *
+// pattern_create(int pattern_size)
+// {
+//     Pattern *result = malloc(sizeof(Pattern));
+//     result->values = calloc(pattern_size * pattern_size, sizeof(uint32_t));
+//     result->count = 1;
+//     return result;
+// }
 
 
-void pattern_copy(Pattern *dest, Pattern *src, int pattern_size)
+internal void 
+pattern_copy(Pattern *const dest, const Pattern *const src, const int pattern_size)
 {
-    memcpy(dest->values, src->values, pow(pattern_size, 2) * sizeof(int));
+    memcpy(dest->values, src->values, pattern_size * pattern_size * sizeof(uint32_t));
     dest->count = src->count;
 }
 
 
-PatternList *patternlist_create(int capacity)
+internal PatternList *
+patternlist_create(const int capacity)
 {
     PatternList *result = malloc(sizeof(PatternList));
     size_t *patterns = calloc(capacity, sizeof(size_t));
@@ -92,72 +97,96 @@ PatternList *patternlist_create(int capacity)
     return result;
 }
 
-void patternlist_append(PatternList *list, int value)
+internal void 
+patternlist_append(PatternList *const list, const int value)
 {
-    if (list->count > (list->capacity / 2))
-    {
+    if (list->count > (list->capacity / 2)) {
         list->capacity *= 2;
         list->patterns = realloc(list->patterns, list->capacity * sizeof(int));
+        list->patterns = realloc(list->patterns, list->capacity * sizeof(int));
+        
+        list->patterns = realloc(list->patterns, list->capacity * sizeof(int));  
         
     }
     list->patterns[list->count++] = value;
 }
 
 
-void patternlist_free(PatternList *p)
+internal void 
+patternlist_free(PatternList *p)
 {
     free(p->patterns);
     free(p);
 }
 
 
-int generate_patterns(const CellGrid *grid, const unsigned int max_patterns, const unsigned int pattern_size, Pattern **results)
+internal bool 
+pattern_in_list(Pattern *const new, Pattern *const patterns,
+                const size_t pattern_count, const size_t pattern_size)
+{
+    bool existing_cell = false;
+
+    for (size_t k = 0; k < pattern_count; ++k)
+    {
+
+        if (pattern_equals(*new, patterns[k], pattern_size))
+        {
+            patterns[k].count++;
+            existing_cell = true;
+            break;
+        }
+    }
+    return existing_cell;
+}
+
+
+internal int 
+generate_patterns(const CellGrid *const grid, const unsigned int max_patterns, 
+                  const unsigned int pattern_size, Pattern **results)
 {
 
     Pattern *patterns = malloc(sizeof(Pattern) * max_patterns);
 
-    for (size_t i = 0; i < max_patterns; ++i)
-    {
-        patterns[i].values = malloc(pow(pattern_size, 2) * sizeof(int));
+    for (size_t i = 0; i < max_patterns; ++i) {
+        patterns[i].values = malloc(pattern_size * pattern_size * sizeof(int));
     }
 
     int pattern_count = 0;
-    for (size_t i = 0; i < grid->rows - (pattern_size - 1); ++i)
-    {
-        for (size_t j = 0; j < grid->cols - (pattern_size - 1); ++j)
-        {
+    for (size_t i = 0; i < grid->rows - (pattern_size - 1); ++i) {
+        for (size_t j = 0; j < grid->cols - (pattern_size - 1); ++j) {
             int idx = 0;
-            Pattern *new = pattern_create(pattern_size);
+            Pattern new = {.count = 1};
+            uint32_t new_values[pattern_size * pattern_size];
+            new.values = new_values;
 
 
-            for (size_t k = 0; k < pattern_size; ++k)
-            {
-                for (size_t l = 0; l < pattern_size; ++l)
-                {
-                    new->values[idx++] = cellgrid_get_cell(grid, j + l, i + k);
+            for (size_t k = 0; k < pattern_size; ++k) {
+                for (size_t l = 0; l < pattern_size; ++l) {
+                    new.values[idx++] = cellgrid_get_cell(grid, j + l, i + k);
                 }
             }
 
             
             
-            // check if already in list
-            bool new_cell = true;
-            for (int k = 0; k < pattern_count; ++k)
-            {
-
-                if (pattern_equals(*new, patterns[k], pattern_size))
-                {
-                    patterns[k].count++;
-                    new_cell = false;
-                    break;
+            // Check if already in list
+            if (!pattern_in_list(&new, patterns, pattern_count, pattern_size)) {
+                pattern_copy(&patterns[pattern_count++], &new, pattern_size);
+            } else {
+                continue;
+            }
+            // Add all symmetries to list
+            for (size_t k = 0; k < N_SYMMETRIES - 1; ++k) {
+                uint32_t rotated_values[pattern_size * pattern_size];
+                for (size_t y = 0; y < pattern_size; ++y) {
+                    for (size_t x1 = 0, x2 = pattern_size - 1; x1 < pattern_size; ++x1, --x2) {
+                        rotated_values[x2 * pattern_size + y] = new.values[y * pattern_size + x1];
+                    }
+                }
+                memcpy(new.values, rotated_values, sizeof(rotated_values));
+                if (!pattern_in_list(&new, patterns, pattern_count, pattern_size)) {
+                    pattern_copy(&patterns[pattern_count++], &new, pattern_size);
                 }
             }
-            if (new_cell)
-            {
-                pattern_copy(&patterns[pattern_count++], new, pattern_size);
-            }
-            free(new->values);
-            free(new);
         }
     }
 
@@ -165,45 +194,32 @@ int generate_patterns(const CellGrid *grid, const unsigned int max_patterns, con
     return pattern_count;
 }
 
-
-int get_pattern_idx(Pattern *patterns, int n_patterns, uint32_t *values, int n)
+internal bool 
+check_vertical_match(uint32_t *top, uint32_t *bottom, int pattern_size)
 {
-    for (int i = 0; i < n_patterns; ++i)
-    {
-        for (int j = 0; j < n; j++)
-        {
-            if (patterns[i].values[j] != values[j])  continue;
-            return i;
-        }
-    }
-    return -1; // unreachable
-}
-
-
-bool check_vertical_match(uint32_t *top, uint32_t *bottom, int pattern_size)
-{
-    for (int i = 0; i < (pattern_size * (pattern_size-1)); ++i)
-    {
+    for (int i = 0; i < (pattern_size * (pattern_size-1)); ++i) {
         if (bottom[i] != top[i + pattern_size])
             return false;
     }
     return true;
 }
 
-bool check_horizontal_match(uint32_t *left, uint32_t *right, int pattern_size)
+internal bool
+check_horizontal_match(uint32_t *left, uint32_t *right, int pattern_size)
 {
-    // left  1 2 4 5 7 8     1 3
-    // right 0 1 3 4 6 7     0 2
-
-    for (int i = 0; i < pow(pattern_size, 2); ++i)
-    {
-        if ((i % pattern_size) == (pattern_size - 1)) continue;
-        if (right[i] != left[i + 1]) return false;
+    for (int i = 0; i < pattern_size * pattern_size; ++i) {
+        if ((i % pattern_size) == (pattern_size - 1)){
+            continue;
+        }
+        if (right[i] != left[i + 1]) {
+            return false;
+        }
     }
     return true;
 }
 
-void establish_rules(int n_patterns, Pattern *patterns, int n_rules, PatternList *rules[n_rules], int pattern_size)
+internal void
+establish_rules(int n_patterns, Pattern *patterns, int n_rules, PatternList *rules[n_rules], int pattern_size)
 {
     for (int i = 0; i < n_rules; ++i)
         rules[i] = patternlist_create(10);
@@ -240,22 +256,24 @@ void establish_rules(int n_patterns, Pattern *patterns, int n_rules, PatternList
 }
 
 
-size_t rand_range(const int min_n, const int max_n)
+internal size_t
+rand_range(const int min_n, const int max_n)
 {
     return (size_t) (rand() % (max_n - min_n + 1) + min_n);
 }
 
 
-bool run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const unsigned int output_width, const unsigned int output_height)
+uint32_t *run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const unsigned int output_width, const unsigned int output_height)
 {
-
-    assert(false == 0 && "Warning: false does not equal 0 on this platform");
+    srand(time(NULL));
 
     Pattern *patterns;
-    size_t max_patterns = (grid->rows - (pattern_size - 1)) * (grid->cols - (pattern_size - 1));
+    size_t max_patterns = (grid->rows - (pattern_size - 1)) * 
+                          (grid->cols - (pattern_size - 1)) * 
+                          N_SYMMETRIES;
 
     size_t n_patterns = generate_patterns(grid, max_patterns, pattern_size, &patterns);
-    uint32_t result[output_width][output_height];
+    uint32_t *result = malloc(output_width * output_height * sizeof result[0]);
 
 
     int n_rules = n_patterns * N_DIRECTIONS;
@@ -263,23 +281,6 @@ bool run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
 
     establish_rules(n_patterns, patterns, n_rules, rules, pattern_size);
     
-
-    for (size_t i = 0; i < n_patterns; ++i)
-    {
-        pattern_print(&patterns[i], pattern_size);
-        PatternList current_u_rule = *rules[i * 4 + 0];
-        printf("Up rules (count %d): ", current_u_rule.count);
-        for (size_t j = 0; j < current_u_rule.count; ++j)
-            printf("%ld ", current_u_rule.patterns[j]);
-        PatternList current_l_rule = *rules[i * 4 + 1];
-        printf("\nLeft rules (count %d): ", current_l_rule.count);
-        for (size_t j = 0; j < current_l_rule.count; ++j)
-            printf("%ld ", current_l_rule.patterns[j]);
-        
-        putchar('\n');
-    }
-
-
     size_t output_grid_width = output_width - (pattern_size - 1);
     size_t output_grid_height = output_height - (pattern_size - 1);
     size_t output_grid_size =  output_grid_width * output_grid_height;
@@ -331,7 +332,6 @@ bool run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
 
             if(adj_idx == SIZE_MAX)
                 continue;
-            printf("\nEvaluating adj idx (%lu, %lu)", adj_idx % output_grid_width, adj_idx / output_grid_width);
 
             assert(adj_idx < output_grid_size && "Bad adj idx");
 
@@ -382,7 +382,8 @@ bool run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
             // }
             if (!new_count)
             {
-                logger(WARNING, "Contradiction reached. Exiting...");
+                // logger(WARNING, "Contradiction reached. Exiting...");
+                printf("Contradiction reached...\n");
                 goto cleanup;
             }            
             else if (counts[adj_idx] != 1 && new_count == 1)
@@ -458,7 +459,7 @@ bool run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
                 {
                     for (size_t y = 0; y < pattern_size; ++y)
                     {
-                        result[i + x][j + y] = pattern.values[y * pattern_size + x];
+                        result[(i + x) + output_grid_width *(j + y)] = pattern.values[y * pattern_size + x];
                     }
                 }
             }
@@ -466,19 +467,19 @@ bool run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
             {
                 for (size_t y = 0; y < pattern_size; ++y)
                     {
-                        result[i][j + y] = pattern.values[y * pattern_size];
+                        result[(i) + output_grid_width *(j + y)] = pattern.values[y * pattern_size];
                     }
             }
             else if (i == output_grid_width - 1)
             {
                 for (size_t x = 0; x < pattern_size; ++x)
                     {
-                        result[i + x][j] = pattern.values[x];
+                        result[(i + x) + output_grid_width *(j)] = pattern.values[x];
                     }
             }
             else
             {
-                result[i][j] = pattern.values[0];
+                result[(i) + output_grid_width *(j)] = pattern.values[0];
             }
 
         }
@@ -489,7 +490,7 @@ bool run_wfc_algo(const CellGrid *grid, const unsigned int pattern_size, const u
         putchar('\n');
         for (size_t j = 0; j < output_height; ++j)
         {
-            printf("%02u ", result[i][j]);
+            printf("%02u ", result[(i) + output_grid_width *(j)]);
 
         }
     }
@@ -504,54 +505,9 @@ cleanup:
         free(patterns[i].values);
 
     free(patterns);
-    return true;
+    return result;
 }
 
 
 
 
-
-int main3(void)
-{
-    srand(time(NULL));
-    printf("\n\nRunning wave...\n");
-    uint32_t cells[] = {
-4, 3, 1, 0, 3, 0, 3, 1, 0, 2, 
-4, 3, 0, 4, 1, 3, 1, 0, 1, 4, 
-4, 4, 3, 3, 4, 3, 2, 3, 0, 2, 
-2, 0, 3, 1, 4, 4, 0, 1, 0, 2, 
-3, 2, 3, 3, 1, 3, 4, 3, 2, 3, 
-1, 1, 4, 2, 3, 1, 4, 2, 2, 2, 
-1, 4, 3, 1, 2, 1, 0, 2, 1, 3, 
-2, 4, 2, 1, 0, 2, 0, 2, 3, 0, 
-4, 0, 3, 4, 0, 1, 1, 3, 4, 2, 
-2, 2, 4, 0, 4, 0, 1, 0, 3, 4,
-    };
-    int rows = 10, cols = 10, p_size = 2;
-    CellGrid cell_grid = { .cells = cells, .rows = rows, .cols = cols, .changed = false };
-    run_wfc_algo(&cell_grid, p_size, 24, 32);
-
-
-    return 0;
-    // srand(time(NULL));
-
-    // uint32_t cells2[] = {
-    //     1, 0, 1, 0, 1,
-    //     0, 2, 0, 2, 3,
-    //     1, 0, 1, 1, 1
-    // };
-    // int rows = 3, cols = 5, p_size = 2, width = 20, height = 20;
-    // CellGrid cell_grid2 = { .cells = cells2, .rows = rows, .cols = cols };
-
-    // // int tries = 1;
-    // // while(!run_wfc_algo(&cell_grid2, p_size, width, height))
-    // // {
-    // //     tries++;
-    // // }
-    // int tries = 1;
-    // run_wfc_algo(&cell_grid2, p_size, width, height);
-
-    // printf("Finished running wave, took %d tries\n", tries);
-
-    return 0;
-}
